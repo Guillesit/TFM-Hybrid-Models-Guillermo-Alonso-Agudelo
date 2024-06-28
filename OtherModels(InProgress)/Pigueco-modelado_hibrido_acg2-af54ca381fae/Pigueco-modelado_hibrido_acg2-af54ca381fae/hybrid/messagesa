@@ -1,0 +1,22 @@
+#Debug info: 
+ 
+#Data generated with the following .exe file:./EXE
+#Initial condition file:in100
+#Parameters file:par100
+#Stopping time: 1.000000 
+ 
+#Specific infos: no oxygen damping, eigenvalue shortcut
+#Specific infos: hybrid method, a single cellular line
+#Death rate: 23999.980800 
+#tau_p: 480.000000
+#source_oxygen: 0.015700
+#k_oxygen: 0.000157
+#p6/p3: 1.000000
+#slot size: 1.000000 mm 
+#Diff coef cells: 0.000000600000000 (user units) 
+#Diff coef oxygen: 0.006000000000000 (user units)
+ 
+ 
+#threshold value: 2000.000000
+#initial memory size: 100000
+#List of issues:

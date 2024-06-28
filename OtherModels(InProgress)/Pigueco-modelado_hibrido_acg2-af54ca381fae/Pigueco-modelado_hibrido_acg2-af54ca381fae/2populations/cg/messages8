@@ -1,0 +1,22 @@
+#Debug info: 
+ 
+#Data generated with the following .exe file:./EXE
+#Initial condition file (host):host25
+#Initial condition file (invader):invader25
+#Initial condition file (oxygen):init_oxy25
+#Parameters file (host):Parhost
+#Parameters file (invader):Parinvaderfuerte
+#Parameters file (simulation):Parsim
+#Event number: 1000000 
+ 
+#Specific infos: oxygen damping, eigenvalue shortcut
+#Death rates: 23999.980800 23999.980800 
+#tau_p's: 480.000000 480.000000
+#p6/p3: 1.000000 1.001000
+#Diffusion coefficients: 0.000001 0.000001 0.006000
+#source_oxygen: 0.015700
+#k_oxygen: 0.000157
+#slot size: 1.000000 mm
+ 
+ 
+#List of issues:

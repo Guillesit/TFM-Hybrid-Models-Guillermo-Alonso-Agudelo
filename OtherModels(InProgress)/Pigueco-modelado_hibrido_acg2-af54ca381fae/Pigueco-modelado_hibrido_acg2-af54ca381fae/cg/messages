@@ -1,0 +1,17 @@
+#Debug info: 
+ 
+#Data generated with the following .exe file:./EXE
+#Initial condition file:In100
+#Parameters file:Par100
+#Event number: 500000 
+ 
+#Specific infos: oxygen damping, eigenvalue shortcut, a single cellular line
+#Death rate: 23999.980800 
+#tau_p: 480.000000
+#source_oxygen: 0.015700
+#k_oxygen: 0.000157
+#p6/p3: 1.000000
+#slot size: 1.000000 mm
+ 
+ 
+#List of issues:

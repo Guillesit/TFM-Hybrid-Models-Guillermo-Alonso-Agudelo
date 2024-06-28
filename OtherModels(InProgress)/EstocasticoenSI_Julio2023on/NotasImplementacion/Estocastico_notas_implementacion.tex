@@ -1,0 +1,414 @@
+%% Latex
+
+\documentclass[12pt]{article}
+
+\textwidth=6.5true in
+\textheight=8.5 true in %9
+\topmargin-0.5true in
+\oddsidemargin=-0.10true in
+
+
+\usepackage{amsthm}
+
+\usepackage{amssymb,amsmath}
+\usepackage{graphics,epsfig,longtable,setspace,color,xcolor}
+\usepackage{mathtools}
+%\usepackage{lipsum}
+\usepackage{amsfonts}
+\usepackage{graphicx}
+\usepackage{epstopdf}
+%\usepackage{algorithmic}
+\usepackage{amsopn}
+%\usepackage{mhchem}
+%\usepackage{longtable} 
+
+
+\numberwithin{equation}{section}
+
+
+
+
+%%%%%%
+%%%%%%%%%%%
+\begin{document}
+\title{Notas de implementaci\'on para el Gillespie con estructura de edad}
+
+
+\date{\today}
+\maketitle
+
+
+%%%%%%%%%
+\section{Consideraciones generales}
+
+
+%%%%%%%%%%%%%%%%
+\subsection{Directiva de compilaci\'on}
+Se crea el ejecutable con una directiva como la que sigue: 
+\begin{verbatim}
+gcc Main.c Read.c PDESolver.c Utilities.c Gillespie.c -o EXE 
+\end{verbatim}
+%
+Flags:
+\begin{itemize}
+\item Si se compila en Linux, anhadir \begin{verbatim}-lm\end{verbatim}
+\item Para cuestiones de rendimiento, anhadir \begin{verbatim}-O2\end{verbatim} (el uso de \begin{verbatim}-O3\end{verbatim} parece arriesgado).
+\end{itemize}
+%%%%%%
+\subsection{Unidades}
+Por ahora, en los ficheros de entrada se entiende que las magnitudes est\'an dadas en unidades del sistema internacional (metros y segundos y, en principio, moles). Internamente se trabaja de forma adimensional. Las salidas que dependen de espacio est\'an dadas de forma adimensional. Otras salidas, seg\'un se especifique.
+
+
+%%%%%%
+\subsection{Ecuaciones}
+La ecuaci\'on para el ox\'igeno que trabajamos en la actualidad es 
+\begin{equation}
+\label{eq:cdim}
+ \frac{\partial c}{\partial t}=D_c \frac{\partial^2 c}{\partial x^2}-k_1 n(t,x)c
+ -k_2c+S,
+ \end{equation}
+ %
+ donde entendimos que la $n$ es una densidad de individuos. Se resuelve en un intervalo espacial, puede tener condiciones de flujo cero o entrante. Podr\'ia no tener un t\'ermino fuente extra en algunas aplicaciones. La ratio de proliferaci\'on coarse-grained $\lambda=\lambda_n(c)$ ({\em que en esta rutina se usa para determinar la distribuci\'on de edades en equilibrio}) se calcula mediante
+\begin{equation}
+\label{eq:lambda}
+ \frac{2 F_S}{\tau_p}\frac{e^{-\left(\lambda+\nu\right) a_{G1/S}}}{\lambda+\nu+1/\tau_p}=1.
+\end{equation}
+
+
+%%%%%%%%
+\subsection{Formato de entrada}
+La simulaci\'on se ejecuta con una directiva de tipo
+\begin{verbatim}
+./EXE host_necrotic oxy_necrotic pars_pop pars_sim a
+\end{verbatim}
+Por orden,
+\begin{enumerate}
+\item El primer argumento es el nombre del ejecutable.
+\item El segundo y el tercero son las distribuciones iniciales de poblaci\'on y ox\'igeno.
+\item El cuarto es un fichero de par\'ametros relativos a caracter\'isticas de la poblaci\'on.
+\item El quinto es un fichero de par\'ametros que indica informaci\'on sobre la simulaci\'on.
+\item El sexto es un literal de caracteres que identifica a los ficheros y carpetas de salida.
+\end{enumerate}
+
+%%%%%%%%
+\paragraph{Formato para las distribuciones}
+Ambos son ficheros dados por una \'unica columna de valores. Le\'idos de arriba a abajo, se entiende que son los valores sobre una malla de paso uniforme (cuyo valor se especifica en otro fichero de entrada, ver m\'as abajo), especificados de izquierda a derecha. Cada valor va separado del siguiente por un salto de l\'inea. No se incluye un salto de l\'inea tras el \'ultimo valor (cuidado porque si se hace se procesa mal el tamanho de la malla espacial). El n\'umero de slots de la malla espacial se deduce de forma indirecta a partir del n\'umero de l\'ineas de estos ficheros.
+
+El fichero de entrada para la poblaci\'on se interpreta como una cantidad de part\'iculas (en cada localizaci\'on espacial -slots de tama\~no $\Delta x$, que {\em no tiene por qu\'e} ser exactamente 1 metro). El fichero de entrada para el ox\'igeno, de forma similar con valores de concentraci\'on, dados en el SI. 
+
+
+%%%%%%%%
+\paragraph{Formato para el fichero de par\'ametros de la poblaci\'on}
+Se incluyen una serie de n\'umeros en la misma l\'inea, separados por espacios. No hay ning\'un caracter tras el \'ultimo valor num\'erico. Por orden, se trata de:
+
+\begin{enumerate}
+
+\item The death rate, $\nu$.
+
+\item The proliferation-related parameter, $\tau_p$.
+
+\item The value of $a_+$, proliferation rate at zero oxygen. {\em De momento no vamos a consi\-derar el r\'egimen de $p6/p3$ para el cu\'al esta cantidad es relevante. As\'i que podr\'iamos suprimirla.}
+
+\item The value of $p6/p3$
+
+\item The diffusion coefficient, $D_n$.
+
+\item The survival rate (take $F_S=1$ when we do not include therapy).
+
+
+\end{enumerate}
+
+
+%%%%%%%%
+\paragraph{Formato para el fichero de par\'ametros de la simulaci\'on}
+Se incluyen una serie de n\'umeros en la misma l\'inea, separados por espacios. No hay ning\'un caracter tras el \'ultimo valor num\'erico. Por orden, se trata de:
+
+\begin{enumerate}
+
+\item El decay rate para el ox\'igeno, $k_2$.
+
+\item La tasa de consumo de ox\'igeno, $k_1$.
+
+\item El coeficiente de difusi\'on del ox\'igeno, $D_c$.
+
+\item El t\'ermino fuente de la ecuaci\'on para el ox\'igeno, $S$.
+
+\item El tiempo de parada de la simulaci\'on (suponiendo que empezamos a tiempo cero).
+
+\item El n\'umero de ficheros de salida deseados para las distribuciones espaciales, nfiles (aparte los de las condiciones iniciales). Equidistribu\'idos en tiempo entre el instante cero y el tiempo final especificado.
+
+\item El paso de la malla, $\Delta x$.
+
+\item El $\Delta t$ sugerido para el integrador en tiempo (internamente se refina si fuera necesario para cumplir las condiciones de estabilidad pertinentes). Recomendable que divida de forma exacta al tiempo final.
+
+\end{enumerate}
+
+Este formato puede variar (por el final) si hay que anhadir un flujo entrante, etc. Consultar el fichero de cabecera en cada caso. Todos los par\'ametros especificados van en unidades del SI siempre que  sea aplicable.
+
+%%%%%%%%%
+\subsection{Formato de salida}
+\label{subsec:salida}
+Se obtienen dos ficheros de salida y dos carpetas. 
+\begin{itemize}
+\item Un fichero messages con informaci\'on sobre los par\'ametros utilizados en la simulaci\'on asociada, expresados en las unidades del SI. Tambi\'en incluye los valores del equili\-brio homog\'eneo no trivial asociado a los par\'ametros de la simulaci\'on proporcionados, expresado en las unidades del SI.
+
+\item Un fichero de dos columnas con el n\'umero total de individuos  de la poblaci\'on (segunda columna)
+%, podr\'ian ser decimales)
+ en funci\'on del tiempo (primera columna, en segundos), en los instantes de tiempo determinados conforme al tiempo final y el n\'umero de ficheros de salida especificados. Tales instantes est\'an relacionados con un equiespaciado en tiempo (primer instante que el tiempo del proceso de Markov pasa por encima de cada una de las marcas) y van correlativos a los ficheros en espacio que la rutina devuelve, ver siguiente punto. 
+
+\item Una carpeta con nfiles+1 ficheros que representan el n\'umero de individuos por casilla 
+%densidad `de poblaci\'on
+ a cada instante de tiempo especificado (inclu\'ida la distribuci\'on inicial). El formato es a columna \'unica, como la del fichero de entrada de la poblaci\'on.
+
+\item Otra carpeta similar para los valores de la concentraci\'on de  ox\'igeno en funci\'on del tiempo.
+\end{itemize}
+
+
+%%%%%%%%%%%
+\subsection{Sobre integradores en tiempo}
+De momento tenemos un Euler expl\'icito, el m\'as sencillo y de peores prestaciones. RK4 puede ser muy lento, ver si hay discrepancias que justifiquen su uso. Espec\'ificos de la GSL por ver si merece la pena, e impl\'icitos lo mismo, ya que la ventaja de tomar pasos en tiempo grandes se puede ver anulada si esperamos variaci\'on temporal r\'apida del $\lambda$, o cuando los mezclemos con el h\'ibrido ya que estamos subordinados al $\tau$ del Gillespie -otra cosa es que usemos alg\'un tipo de tau-leaping, por investigar. Otro problema de los impl\'icitos es que el modelo no es lineal, de forma que a cada paso hay que resolver un sistema grande de ecuaciones via Newton o similar, lo que puede ser bastante caro (al menos si se plantea de forma inocente) y anular la supuesta ventaja de tomar $\Delta t$ grande.
+
+%%%%%%%%%%
+\section{Secuencia de pasos del c\'odigo}
+
+%%%%%%%%%%%%%%
+\subsection{Procesamiento de la entrada}
+Tras leer todos los ficheros de entrada de la simulaci\'on, se calculan los equilibrios no triviales $(c_\infty,n_\infty)$ conforme a\footnote{No s\'e si hay alguna condici\'on c\'omoda para poder asegurar a priori que $n_\infty, c_\infty \ge 0$.} 
+\[
+c_\infty=c_{cr} + c_{cr} \left( \frac{1}{a_- \nu}\log \left(\frac{2 F_S}{1+\nu \tau_p}\right)\right)^{-1/\beta},\quad n_\infty= \frac{S-k_2 c_\infty}{k_1 c_\infty}\:.
+\]
+Esta informaci\'on se escribe en el fichero de messages. Se tomar\'an adem\'as un tiempo y un espacio adimensionales dados por
+\[
+\hat t=t/\tau_p,\quad \hat x = x/l,
+\]
+donde la escala caracter\'istica en longitud viene dada por
+\[
+l=\sqrt{D_n \tau_p}.
+\]
+%%%%%%%%%
+\subsection{C\'alculos iniciales}
+Se sobreentiende que de aqu\'i en adelante trabajamos internamente con $\hat c(\hat t,\hat x)=c(t,x)/c_\infty$, donde $c$ es la soluci\'on de \eqref{eq:cdim}. Se lleva a cabo esta operaci\'on con las lecturas iniciales de  ox\'igeno.
+
+Se definen los par\'ametros adimensionales
+\[
+\hat D_c=D_c/D_n,\quad \hat k_1=k_1 n_\infty \tau_p,\quad \hat k_2 = k_2 \tau_p,\quad \hat S= S \tau_p/c_\infty,\quad \hat \nu=\nu \tau_p.
+\]
+Se definen adem\'as 
+\[
+\hat{a}_{G_1\backslash S}(\hat c)= a_{G_1\backslash S}(c)/\tau_p,\quad \hat \lambda(\hat c) = \lambda(c)\:.
+\]
+Para realizar el c\'alculo inicial de las edades de divisi\'on, se utiliza el modelo (dimensional)
+\[
+a_{G_1\backslash S}(c)=a_-\left(\frac{c}{c_{cr}(p^*)}-1\right)^{-\beta}\:.
+\]
+Aqu\'i $p^*=p6/p3$ que de momento se est\'a tomando como igual a uno. Para realizar los c\'alculos adimensionales, se introduce $\hat a = a/\tau_p$ y por tanto se reescribe todo como
+\[
+\hat{a}_{G_1\backslash S}(\hat c)= \frac{a_{G_1\backslash S}(c)}{\tau_p}= \hat{a}_- \left(\frac{\hat c}{\hat c_{cr}(p^*)}-1\right)^{-\beta}
+\]
+
+{\bf El valor $a_-$ est\'a fijado a 8.5 horas (30600 segundos), al menos por ahora. N\'otese tambi\'en que ahora mismo el valor $c_{cr}(p^*)$ est\'a dado por la expresi\'on}
+\[
+c_{cr}(p^*) = \frac{c_{typ}}{100} \frac{{\rm c_{cr}(p^*)}}{{\rm c_{cr}(1)}}
+\]
+donde $c_{typ}$ es un valor t\'ipico para la concentraci\'on del ox\'igeno\footnote{Se aplican las mismas consideraciones delicadas que con la rutina coarse-grained.}, y ${\rm c_{cr}}$ es la f\'ormula de Tom\'as para el ox\'igeno cr\'itico.
+
+%%%%%%%%%%
+\subsection{Determinaci\'on de la distribuci\'on inicial de edades}
+Se trata de muestrear la distribuci\'on de edades de equilibrio (adimensional),
+\begin{equation}
+\label{eq:ages}
+P(\hat a)= \exp (-\hat\nu \hat a - \hat\lambda(\hat c)\hat a - (\hat a-\hat a_{G_1\backslash S})H(\hat a-\hat a_{G_1\backslash S})) /Z,
+\end{equation}
+(donde $H$ es la funci\'on de Heaviside) el n\'umero adecuado de veces en cada localizaci\'on espacial, conforme a la poblaci\'on inicial dada. 
+
+El hipot\'etico caso en el que $\hat \lambda(\hat c)\simeq -\hat \nu$ puede ser problem\'atico, de manera que lo tratamos aparte, justo como si fuera $\hat\lambda(\hat c)= -\hat \nu$. En esta situaci\'on,
+\[
+Z=1+\hat a_{G_1\backslash S},\quad P_1(\hat a):=\int_0^{\hat a} Z P(\hat a)\, d\hat a= \hat a \quad \mbox{para}\ \hat a<\hat a_{G_1\backslash S}\:,
+\]
+%
+\[
+P_1^*:=P_1(\hat a_{G_1\backslash S}),\quad P_2(\hat a):=\int_{\hat a_{G_1\backslash S}}^{\hat a} ZP(\hat a)\, d\hat a= 1- \exp (\hat a_{G_1\backslash S}-\hat a)\quad \mbox{para}\ \hat a>\hat a_{G_1\backslash S}\:.
+\]
+Para muestrear la distribuci\'on en este caso, se obtiene $r\in (0,1)$ mediante una uniforme y se aplica ({\bf por volver a comprobar}):
+\begin{itemize}
+\item Si $r\le P_1^*/Z$, entonces $\hat a=r Z$.
+\item Si $r>P_1^*/Z$, entonces $\hat a=\hat a_{G_1\backslash S} -log(Z(1-r))$.
+\end{itemize}
+
+En el resto de casos, se obtiene que 
+\[
+Z=\frac{1}{\hat \nu+\hat \lambda}\left(1-\frac{\exp(-(\hat \nu+\hat \lambda)\hat a_{G_1\backslash S})}{1+\hat \nu+\hat \lambda}\right),\quad P_1(\hat a):= \frac{1-\exp(-(\hat \nu+\hat \lambda)\hat a)}{\hat \nu +\hat \lambda} \quad \mbox{para}\ \hat a<\hat a_{G_1\backslash S}\:,
+\]
+%
+\[
+ P_2(\hat a):=\int_{\hat a_{G_1\backslash S}}^{\hat a} ZP(a)\, d\hat a= \frac{e^{\hat a_{G_1\backslash S}}}{1+\hat \nu+\hat \lambda} [\exp(\hat a_{G_1\backslash S} (1+\hat \nu+\hat \lambda))-\exp(\hat a\,(1+\hat \nu+\hat \lambda))]\quad \mbox{para}\ \hat a>\hat a_{G_1\backslash S}\:.
+\]
+Para muestrear la distribuci\'on ahora, se obtiene $r\in (0,1)$ mediante una uniforme y se aplica ({\bf por volver a comprobar}):
+\begin{itemize}
+\item Si $r\le P_1^*/Z$, entonces $\hat a=-\frac{1}{\hat \nu+\hat \lambda} \log(1-r Z (\hat \nu+\hat \lambda))$.
+\item Si $r>P_1^*/Z$, entonces $\hat a=-\frac{1}{1+\hat \nu+\hat \lambda} [\log((1-r) Z (1+\hat \nu+\hat \lambda))-\hat a_{G_1\backslash S}]$.
+\end{itemize}
+
+Para realizar el c\'alculo de la tasa neta de proliferaci\'on (adimensionalizada) que va en \eqref{eq:ages} se reescribe \eqref{eq:lambda} como
+\[
+\frac{1}{2F_S} = \frac{\exp \left(-\hat{a}_{G_1\backslash S}(\hat c) (\hat \nu +\hat \lambda(\hat c)) \right) }{1+\hat \nu +\hat \lambda(\hat c)}\:.
+\]
+Que a su vez se resuelve tomando logaritmos, es decir, se le aplica Newton-Rhapson a
+\[
+\log(1+\hat \nu +\hat \lambda(\hat c)) - \log(2 F_S) + \hat{a}_{G_1\backslash S}(\hat c) (\hat \nu +\hat \lambda(\hat c))=0\:.
+\]
+%%%%%%%%%%
+\subsection{Bucle principal}
+
+Se simula una versi\'on adimensional de la ecuaci\'on para el ox\'igeno. Conforme a todo lo descrito anteriormente, se trata de
+\begin{equation}
+\label{eq:cadim}
+ \frac{\partial \hat c}{\partial \hat t}=\hat D_c\frac{\partial^2 \hat c}{\partial \hat x^2}-\hat k_1 \hat n\, \hat c -\hat k_2\, \hat c+\hat S.
+ \end{equation}
+ %
+% \begin{equation}
+% \label{eq:nadim}
+%  \frac{\partial \hat n}{\partial \hat t}=\frac{\partial^2 \hat n}{\partial \hat x^2}+\hat \lambda_n(\hat c)\hat n.
+%\end{equation}
+%
+Para discretizar las derivadas espaciales se usa la f\'ormula centrada de orden 2, con respecto al paso de malla adimensionalizado $\Delta \hat x= \Delta x/l$. 
+A este fin, internamente se consideran coeficientes efectivos dados por
+\[
+\bar D_c=\frac{\hat D_c}{(\Delta \hat x)^2},\quad \bar k_1=\frac{\hat k_1\, \Delta x}{n_\infty}=k_1 \tau_p \Delta x\:.
+\]
+(El motivo del \'ultimo es que la poblaci\'on se representa en el c\'odigo como un vector de n\'umero de individuos por caja, as\'i que la conversi\'on a densidad normalizada es c\'omodo hacerla v\'ia la constante multiplicativa; recordar que $\hat n(\hat t,\hat x)=n(t,x)/n_\infty$, estando $n_\infty$ medido en el SI.)
+A cada paso del bucle principal se intenta avanzar el sistema un incremento de tiempo de $\Delta t$ segundos; en el modelo adimensionalizado \eqref{eq:cadim}, esto se traduce en realizar un avance de $\Delta \hat t=\Delta t /\tau_p$. Si este incremento de tiempo no cumple las condiciones de estabilidad para hacer un Euler expl\'icito con \eqref{eq:cadim}, entonces se refina internamente de forma que las cumpla.
+
+Las ratios de transici\'on para la poblaci\'on se adimensionalizan conforme al siguiente criterio {\bf (no he podido repasar los c\'alculos a\'un:)} Doy las propensidades, todo son cin\'eticas de primer orden:
+\begin{itemize}
+\item Muerte: $\hat \nu$.
+\item Nacimiento: $H(\hat a - \hat{a}_{G_1\backslash S})$
+\item Difusi\'on (equiprobable en cada direcci\'on): $1/(\Delta \hat x)^2$.
+\end{itemize}
+
+
+%%%%%%%%%%%
+\subsection{Datos de salida y terminaci\'on}
+Se divide el intervalo temporal $[0, tstop]$ en nfiles subintervalos de igual longitud. Con referencias en  cada nodo temporal as\'i obtenido se mandan datos a la salida, conforme se explic\'o en la subsecci\'on \ref{subsec:salida}. 
+%Como los datos espaciales se muestran adimensionales, no es necesaria ninguna reconversi\'on previa a la salida. Para el fichero del total de c\'elulas se multiplican los valores adimensionales de la poblaci\'on en cada casilla por $n_\infty \Delta x$ y se suman sobre todas las casillas.
+
+N\'otese que si la simulaci\'on aborta antes de terminar, s\'i se generan las salidas espaciales previas al instante de fallo, pero no el fichero de mensajes ni el de n\'umero total de c\'elulas vs tiempo. Creemos que el mecanismo de extensi\'on de memoria genera violaciones de segmento en algunas ocasiones. Esto no est\'a investigado en detalle, de momento lo sorteamos por fuerza bruta, asignando de salida $5*10^4$ casilla de memoria para edades en cada localizaci\'on espacial.
+
+
+
+
+
+%%%%%%%%%%%%%%%
+%\subsection{Algunas notas de implementaci\'on}
+%
+%En vez de resolver \eqref{eq:lambda}, se resuelve
+%\[
+%\log \left(1+\nu\tau_p+\lambda \tau_p \right) -\log (2F_S) +  a_{G1/S} (\lambda + \nu) = 0
+%\]
+%via Newton--Rhapson's iteration, i.e.
+%\[
+%\lambda^{(n+1)} = \lambda^{(n)} - \frac{\left(1/\tau_p+\nu+\lambda^{(n)}  \right) \left(\log \left(1+\nu\tau_p+\lambda^{(n)} \tau_p \right) -\log (2F_S) +  a_{G1/S} (\lambda^{(n)} + \nu)\right)}{1+a_{G1/S} (1/\tau_p+\nu + \lambda^{(n)})}\:.
+%\]
+%Tras hacer pruebas con los valores de los par\'ametros que solemos manejar, sobre 20 \'ordenes de magnitud para $a_{G1/S} $, se observa que: (i) si empezamos desde $\lambda=0$, suelen bastar tres iteraciones, a lo mucho cinco, para estar cerca del l\'imite, (ii) los valores obtenidos son habitualmente muy cercanos a cero, y por ello la evoluci\'on de la simulaci\'on completa es muy sensible a pequenhas discrepancias aqu\'i, (iii) el cuello de botella de toda la simulaci\'on est\'a aqu\'i; no parece que se ahorre tiempo de c\'omputo vectorizando las llamadas a este subm\'odulo (por probar de forma m\'as exhaustiva en situaciones de inter\'es).
+%
+%Actualmente est\'a implementado de forma que o se para cuando dos iteraciones sucesivas difieren menos de $10^{-10}$, o cuando alcanzamos las 7 iteraciones. 
+%
+%
+%%%%%%%%%%%
+%\smallskip
+%
+%Las condiciones de contorno Neumann se tratan mediante una f\'ormula asim\'etrica de orden dos,
+%\[
+%\frac{\partial u}{\partial x}(x)\simeq \frac{-u(x+2h)+4u(x+h)-3u(x)}{2h}, \quad \frac{\partial u}{\partial x}(x)\simeq \frac{u(x-2h)-4u(x-h)+3u(x)}{2h}\:.
+%\]
+
+
+
+  
+  
+%  \subsection{Sobre el modelo del ciclo celular}
+%  Estos c\'alculos se hacen en gran medida en una rutina aparte, que habr\'a que depurar.
+%  
+%   We refer to the mean first-passage time for the cell to reach the G1/S transition as the age at the G1/S transition, $a_{G1/S}$, since this time is counted from the moment of birth of the cell. It is given by the following expression:
+%
+%\begin{equation}\label{eq:ag1sscaling}
+%a_{G1/S}\left(c,p^*\right)\simeq\left\{\begin{array}{l}a_{+}
+%\left(p^*\right)e^{-c/c_0}\mbox{ if 
+%}p^*>r_{cr}\\a_-\left(\frac{c}{c_{cr}(p^*)}-1\right)^{-\beta}
+%\mbox{ if 
+%}p^*<r_{cr}\end{array}\right.
+%\end{equation}
+%
+%\noindent Here, $c_0$, $a_-$, and $\beta$ are constants (see table \ref{tab:cell_cycle_pars}), $a_+(p^*):=a_{G1/S}(c=0,p^*)$ and\footnote{Our current way of computing $a_+$ is by simulation of the ODE model until the switch takes place. It would be better to perform a series of representative simulations and produce a reference data file, once and for all.} 
+%
+%\begin{equation}
+%c_{cr}\left(p^*\right):=1-\frac{1}{\beta_{1}}\log{\left(\frac{1}{a_{3}H_{0}}\left(a_{1}+\frac{a_{2}d_{2}
+%}{d_{1}[e2f]_{t}}\left(1-\frac{1}{1-a_0\left(p^*\right)^2}
+%\right)\right)\right)}\\
+%\end{equation}
+%
+%\noindent The parameters $a_1$, $a_2$, $a_3$, $d_1$, $d_2$, $\beta_{1}$, $[e2f]_{t}$, and $H_0$ are 
+%kinetic parameters of the mean-field model defined in XX and $a_0$ is calculated in XX. 
+%
+%{\em Convendr\'ia revisar la calibraci\'on de las constantes de esta parte, parece haber discrepancias con los resultados (publicados) de Roberto para el switch time.}
+%
+%
+%
+%\begin{table}
+%\begin{tabular}{|c|c|c|}
+%\hline
+%Parameter & Value & Observations 
+% \\
+% \hline
+%$r_{cr}$ & $1.004$ & {\small Above this value there is no transition to quiescence, even in total absence of oxygen.} 
+% \\
+% $a_-$ & $8250$ & {\small It should be circa 24 h {\bf Measurement units?} [My bet is $\Delta t= 6$ seg, making it circa 14h]}
+% \\
+% $\beta$ & $0.2$ & 
+% \\
+% $c_0$ & $1.1$ &  {\small {\bf Measurement units?}}
+% \\
+% \hline
+%\end{tabular}
+%\caption{Parameters that are currently used for the cell cycle model.}
+%\label{tab:cell_cycle_pars}
+%\end{table}
+%%%%%%%%%
+%
+%%%%%%%%%%%%%%%
+%\subsection{Usual parameter values}
+%
+%The parameter values associated to the population dynamics are seemingly taken from the 2016 paper:
+%
+%\begin{itemize}
+%
+%\item  $\nu=0.416667\, 10^{-4} \mbox{ min}^{-1}$ or $0.693\, 10^{-6} \mbox{seg}^{-1}$, probably taken like that to have $\nu^{-1}\simeq 24000$ minutes or 300 hours, average time it takes for a cell to die, if this tells you anything. 
+%
+%\item $\tau_p =480 \mbox{ min}$= 8 hours. 
+%
+%\item Estimates for the oxygen diffusion coefficient and the cell diffusion coefficient are $D_c=10^{-3}$ mm$^2$/sec and $D_n=10^{-7}$ mm$^2$/sec, respectively %citep{perfahl2011,sanchez2015b}. 
+%
+%\item The rates of oxygen supply and oxygen consumption are taken to be $S=1.57\cdot 10^{-2}$ $\mu$M/sec and $k_1=1.57\cdot 10^{-4}$ sec$^{-1}$ %\citep{delacruz2016}. 
+%\item Furthermore, unless  otherwise stated, the oxygen decay rate, $k_2$ is taken so that $\frac{{\cal S}}{k_2}=O(1)$. 
+%\end{itemize}
+%
+%%
+%\smallskip
+%
+%For some purposes the following units may be convenient:
+%$$
+%\Delta x = 10 \mu m,\quad \Delta t= 6 s.
+%$$
+%Then the parameters take the following values (to re-check):
+%$$
+%\tau_p = 4800 \Delta t,\, \nu= 4.16667\cdot 10^{-6} (\Delta t)^{-1},\, k_1=9.42\cdot 10^{-4} (\Delta t)^{-1},
+%$$
+%%
+%$$
+%k_2=9.42\cdot 10^{-2} (\Delta t)^{-1},\, D_c = 60 \frac{(\Delta x)^2}{\Delta t}, \, D_n = 6\cdot 10^{-3} \frac{(\Delta x)^2}{\Delta t}\:.
+%$$
+
+
+
+\end{document}
+

@@ -1,0 +1,25 @@
+#Debug info: 
+ 
+#Data generated with the following .exe file:./EXE
+#Initial condition file (population ages):Probando/pop12
+#Initial condition file (oxygen):Probando/oxy12
+#Population parameters file:Probando/pars_pop
+#Parameters file (simulation):Probando/pars_sim
+#Default unit system as given by the S.I. (seconds, meters, kilograms),
+#let X for space and T for time
+#Grid step (aka delta_x): 1.000000 X 
+#Suggested time increment (aka delta_t): 1.000000 T 
+#Sampling time window: 0.020000 
+#User-provided final time: 2.000000 
+#Number of output files: 100 
+#survival rate: 1.000000 
+#Death rate: 0.0000041667 T^-1 
+#tau_p: 4800.0000000000 T
+#aplus: -1.0000000000 T
+#p6/p3: 1.0000000000 
+#Diffusion coefficients (pop, oxy): 0.0060000000 60.000000 X^2/T
+#k_decay: 0.0942000000 T^-1
+#k_consumption: 0.0009420000 X T^-1
+#k_source: 0.0100000000 X^-1 T^-1
+#neq=106131177.4741706699 X^-1, ceq=0.0000001000 X^-1
+#Note: spatial outputs are dimensionlessTiempo final=2.000001 

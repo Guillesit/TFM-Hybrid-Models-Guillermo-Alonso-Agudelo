@@ -1,0 +1,13 @@
+#Debug info: 
+ 
+#Data generated with the following .exe file:./EXE
+#Initial condition file (population ages):Probando/pop12
+#Initial condition file (oxygen):Probando/pop12
+#Equation parameters file:Probando/sim_params
+#Simulation parameters file:Probando/eq_params
+#Grid step (aka delta_x): 0.010000 X 
+#Suggested time increment (aka delta_t): 0.100000 T 
+#Final time of the simulation: 200.000000 T 
+#Growth rate (r): 1.000000 T 
+#Carrying capacity (K): 5000.000000 T 
+#Diffusion coefficient: 0.000001 T 
