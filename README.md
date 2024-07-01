@@ -3,6 +3,7 @@ Everything can be found on the Releases downloadable or in the master branch.
 This is a list of the contents inside each model's folder: 
 
 -A series of folders numbered which contain the results of each realization of the simulation.
+
 -The code used for the simulation including:
   +Main.cpp The code executed to obtain the results where the main loop is hosted  
   +Header.h Header code containing the references to all functions  
